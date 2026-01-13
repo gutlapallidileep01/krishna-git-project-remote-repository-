@@ -1,0 +1,160 @@
+Jenkins Agent Setup Using Docker + SSH (Step-by-Step Lab)
+ Objective
+Run a Jenkins Agent inside Docker
+Connect it to Jenkins via SSH
+Register it as a Jenkins Node
+Verify the agent using a Pipeline job
+
+Architecture 
+Linux Server
+├── Jenkins Master (Host)
+├── Docker
+│   └── Jenkins Agent (Docker Container)
+│        └── SSH + Java + Maven + Git
+
+🔹 PART 1: Prerequisites
+1️⃣ Jenkins Installed on Linux Server
+Jenkins running on port 8080
+Jenkins user exists (jenkins)
+2️⃣ Docker Installed
+sudo apt update
+sudo apt install docker.io -y
+sudo systemctl start docker
+sudo systemctl enable docker
+Add Jenkins user to Docker group:
+sudo usermod -aG docker jenkins
+➡ Logout & login again
+
+🔹 PART 2: Create Jenkins Agent Docker Image
+1️⃣ Create Directory
+mkdir jenkins-docker-agent
+cd jenkins-docker-agent
+vi dockerfile
+
+2️⃣ Create Dockerfile
+FROM ubuntu:22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get clean && \
+    rm -rf /var/lib/apt/lists/* && \
+    apt-get update && \
+    apt-get install -y \
+        openssh-server \
+        openjdk-17-jdk \
+        git \
+        maven \
+        curl && \
+    mkdir /var/run/sshd && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN useradd -m -s /bin/bash jenkins && \
+    echo "jenkins:jenkins" | chpasswd
+
+RUN sed -i 's/#PasswordAuthentication yes/PasswordAuthentication no/' /etc/ssh/sshd_config && \
+    sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin no/' /etc/ssh/sshd_config
+
+RUN mkdir -p /home/jenkins/.ssh && \
+    chown -R jenkins:jenkins /home/jenkins/.ssh && \
+    chmod 700 /home/jenkins/.ssh
+
+EXPOSE 22
+CMD ["/usr/sbin/sshd", "-D"]
+
+3️⃣ Build Docker Image
+docker build -t jenkins-agent .
+
+🔹 PART 3: Run Jenkins Agent Container
+docker run -d \
+  --name jenkins-agent-1 \
+  -p 2222:22 \
+  jenkins-agent
+Verify:
+docker ps
+
+🔹 PART 4: Configure SSH Key Authentication
+1️⃣ Generate SSH Key (Jenkins Server)
+sudo su - jenkins
+ssh-keygen -t rsa -b 4096
+
+2️⃣ Copy Public Key to Agent Container
+docker exec -it jenkins-agent-1 bash
+Inside container:
+echo "PASTE_JENKINS_PUBLIC_KEY_HERE" >> /home/jenkins/.ssh/authorized_keys
+chown -R jenkins:jenkins /home/jenkins/.ssh
+chmod 700 /home/jenkins/.ssh
+chmod 600 /home/jenkins/.ssh/authorized_keys
+exit
+
+3️⃣ Test SSH (IMPORTANT)
+ssh -p 2222 jenkins@localhost
+✅ Should login without password
+
+🔹 PART 5: Add Jenkins Agent as Node
+Jenkins UI Steps
+Manage Jenkins → Nodes → New Node
+Node Configuration
+Field
+Value
+Node name
+jenkins-agent-1
+Type
+Permanent Agent
+Remote root directory
+/home/jenkins
+Labels
+docker
+Launch method
+Launch agent via SSH
+Host
+localhost
+Port
+2222
+Credentials
+Jenkins SSH private key
+Host key verification
+Non verifying
+Executors
+1
+
+👉 Save → Click Launch Agent
+✅ Status should be Connected
+
+🔹 PART 6: Verify Agent Using Pipeline (TEST)
+1️⃣ Create Pipeline Job
+New Item → Name: verify-agent → Type: Pipeline
+
+2️⃣ Paste Pipeline Script
+pipeline {
+  agent { label 'docker' }
+
+  stages {
+    stage('Verify Jenkins Agent') {
+      steps {
+        sh '''
+          echo "Hostname:"
+          hostname
+
+          echo "User:"
+          whoami
+
+          echo "Workspace:"
+          pwd
+
+          echo "Java:"
+          java -version
+
+          echo "Maven:"
+          mvn -version
+
+          echo "Git:"
+          git --version
+        '''
+      }
+    }
+  }
+}
+
+3️⃣ Run Job
+Click Build Now
+
