@@ -1,0 +1,20 @@
+From 81d1f10dd02cc8975da7d0e270619c5d2fd6538b Mon Sep 17 00:00:00 2001
+From: Dileep Gutlapalli <gutlapallidileep@gmail.com>
+Date: Wed, 14 Jan 2026 19:06:01 -0500
+Subject: [PATCH] Add practice file
+
+---
+ practice.txt | 1 +
+ 1 file changed, 1 insertion(+)
+ create mode 100644 practice.txt
+
+diff --git a/practice.txt b/practice.txt
+new file mode 100644
+index 0000000..f64f39c
+--- /dev/null
++++ b/practice.txt
+@@ -0,0 +1 @@
++practice git by dileep
+-- 
+2.52.0
+
